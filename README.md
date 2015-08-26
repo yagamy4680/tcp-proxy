@@ -14,3 +14,10 @@ node ./app.js -r 127.0.0.1:9000 -l 8000 -m 8010
 ```
 
 Now, you can use `telnet` utility to transmit data with `ttyUSB0` by connecting to `localhost:8000`, and monitor the data packet (in human readable format) by connecting to `localhost:8010`.
+
+
+### Examples to Launch
+
+```bash
+./app.ls -r 192.168.1.10:10034 -l 8000 --monitor 8010 --verbose
+```
