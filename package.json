@@ -1,0 +1,32 @@
+{
+  "name": "tcp-proxy",
+  "author": {
+    "name": [
+      "Yagamy"
+    ],
+    "email": "yagamy@gmail.com"
+  },
+  "description": "A tcp-tunnel proxy with monitor functionalities",
+  "version": "0.0.1",
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "main": "app.ls",
+  "engines": {
+    "node": "0.10.x",
+    "npm": "1.4.x"
+  },
+  "dependencies": {
+    "async": "*",
+    "optimist": "*",
+    "colors": "*",
+    "bunyan": "*",
+    "moment": "*",
+    "bunyan-debug-stream": "*",
+    "sprintf-js": "*",
+    "prelude-ls": "*"
+  },
+  "devDependencies": {},
+  "optionalDependencies": {}
+}
