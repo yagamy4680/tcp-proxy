@@ -18,6 +18,12 @@ Now, you can use `telnet` utility to transmit data with `ttyUSB0` by connecting 
 
 ### Examples to Launch
 
+Connect to localhost:10034, and listen to default ports to serve:
+
+- `8000`, for data transmission
+- `8010`, for data monitoring (line protocol is simply parsed)
+
 ```bash
-./app.ls -r 192.168.1.10:10034 -l 8000 --monitor 8010 --verbose
+./app.ls -r 10034 -p
 ```
+
