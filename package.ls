@@ -43,6 +43,7 @@ dependencies:
   optimist: \*
   colors: \*
   bunyan: \*
+  byline: \*
   moment: \*
   'bunyan-debug-stream': \*
   'sprintf-js': \*
