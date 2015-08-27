@@ -23,6 +23,7 @@
     "colors": "*",
     "bunyan": "*",
     "moment": "*",
+    "zpad": "*",
     "bunyan-debug-stream": "*",
     "sprintf-js": "*",
     "prelude-ls": "*"
