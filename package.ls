@@ -42,10 +42,8 @@ dependencies:
   async: \*
   optimist: \*
   colors: \*
-  bunyan: \*
   byline: \*
   moment: \*
-  'bunyan-debug-stream': \*
   'sprintf-js': \*
   'prelude-ls': \*
 

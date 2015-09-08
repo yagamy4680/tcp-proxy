@@ -1,29 +1,28 @@
 #!/usr/bin/env lsc
-require! <[net events url colors optimist bunyan bunyan-debug-stream async moment byline]>
+require! <[net events url colors optimist async moment byline]>
+commons = require \./lib/commons
 {sprintf} = require \sprintf-js
 {elem-index} = require \prelude-ls
 
 OPT = optimist.usage 'Usage: $0'
-  .alias \r, 'remote'
+  .alias \r, \remote
   .describe \r, 'the remote destination server, e.g. tcp:/192.168.0.2:8080, or just a port number to local server such as 10034'
-  .alias \l, 'listen'
+  .alias \l, \listen
   .describe \l, 'listening port for data transmission, e.g. -l 8000'
   .default \l, 8000
-  .alias \m, 'monitor'
+  .alias \m, \monitor
   .describe \m, 'listening port for data monitoring, e.g. -m 8010'
   .default \m, 8010
-  .alias \v, 'verbose'
+  .alias \v, \verbose
   .describe \v, 'show more verbose messages'
-  .alias \p, 'protocol'
-  .describe \p, 'show line protocol verbose messages'
+  .alias \c, \command
+  .describe \c, 'listening port for command monitoring, e.g. -c 8011'
+  .default \c, 8011
   .default \p, no
-  .boolean <[h v p]>
+  .boolean <[h v]>
   .demand <[r l m]>
 
 CHECK_INTERVAL = 2000ms
-DBG = -> global.logger.debug.apply global.logger, arguments
-INFO = -> global.logger.info.apply global.logger, arguments
-ERR = -> global.logger.error.apply global.logger, arguments
 EXIT = (msg) ->
   ERR msg
   return process.exit 127
@@ -152,13 +151,10 @@ class BaseServer
     c.removeAllListeners \data
     c.removeAllListeners \close
     c.removeAllListeners \end
-    found = no
-    for let s, i in @sockets
-      if not found
-        if c == s
-          sockets.splice i, 1
-          found := true
-          INFO "data_srv[#{i}] disconnected and removed"
+    idx = sockets |> elem-index c
+    if idx?
+      sockets.splice idx, 1
+      INFO "data_srv[#{i}] disconnected and removed"
 
 
 class DataServer extends BaseServer
@@ -228,6 +224,7 @@ class DataFormatter
     @output_lines.push ""
     return @output_lines.join "\r\n"
 
+
   format_line: (line, to_remote) ->
     @counter = @counter + 1
     @.restLines to_remote
@@ -239,16 +236,29 @@ class DataFormatter
       x = "r".bgMagenta.cyan.underline if c == '\r'.charCodeAt!
       x = "n".bgMagenta.cyan.underline if c == '\n'.charCodeAt!
       char_array.push x
-
     @.addLine char_array.join ""
     @output_lines.push ""
     return @output_lines.join "\r\n"
 
 
-class MonitorServer extends BaseServer
+  format_command: (line, to_remote) ->
+    @counter = @counter + 1
+    @.restLines to_remote
+    char_array = []
+    for let c, i in line
+      x = if c >= 0x20 and c < 0x7F then String.fromCharCode c else " ".bgWhite
+      x = " #{'\\t'.blue.bgGreen} " if c == '\t'.charCodeAt!
+      char_array.push x
+    @.addLine char_array.join ""
+    @output_lines.push ""
+    return @output_lines.join "\r\n"
+
+
+
+class DataMonitorServer extends BaseServer
   (@port, @alignments, @remote_tokens) ->
     super port
-    @name = \monitor
+    @name = \data-monitor
     @df = new DataFormatter alignments, remote_tokens
 
   output_buffer: (data, to_remote, cb) ->
@@ -266,6 +276,18 @@ class MonitorServer extends BaseServer
   from_remote_line: (line, cb) -> return @.output_line line, no, cb
 
 
+class CommandMonitorServer extends DataMonitorServer
+  (@port, @alignments, @remote_tokens) ->
+    super port
+    @name = \command-monitor
+    @df = new DataFormatter alignments, remote_tokens
+
+  output_line: (line, to_remote, cb) ->
+    text = @df.format_command line, to_remote
+    return @.writeAll text, cb
+
+
+
 main = ->
   argv = global.argv = OPT.argv
 
@@ -273,22 +295,6 @@ main = ->
     opt.showHelp!
     process.exit 0
 
-  log_level = if argv.v then \debug else \info
-  log_opts =
-    name: \tcp-proxy
-    serializers: bunyan-debug-stream.serializers
-    streams: [
-      * level: log_level
-        type: \raw
-        stream: bunyan-debug-stream do
-          out: process.stderr
-          showProcess: no
-          colors:
-            debug: \gray
-            info: \white
-    ]
-
-  logger = global.logger = bunyan.createLogger log_opts
   argv.r = "tcp://127.0.0.1:#{argv.r}" if \number == typeof argv.r
   DBG "remote = #{argv.r}, listen = #{argv.l}, monitor = #{argv.m}"
 
@@ -297,9 +303,13 @@ main = ->
   DBG "url_tokens.protocol = #{url_tokens.protocol}"
   EXIT "invalid protocol #{url_tokens.protocol.red} for remote destination server" unless (elem-index url_tokens.protocol, <[tcp: ssl:]>)?
 
-  monitor = new MonitorServer argv.m, 16, url_tokens
-  data_srv = new DataServer argv.l, monitor, argv.p
-  client = new RemoteClient url_tokens, monitor, argv.p
+  data_monitor = new DataMonitorServer argv.m, 16, url_tokens
+  data_srv = new DataServer argv.l, data_monitor, argv.c?
+  client = new RemoteClient url_tokens, data_monitor, argv.c?
+
+  command_monitor = null
+  if argv.c?
+    command_monitor := new CommandMonitorServer argv.c, 16, url_tokens
 
   data_srv.addListener \data, (c, data) ->
     client.write data, (err) ->
@@ -307,12 +317,16 @@ main = ->
       return DBG "successfully send #{data.length} bytes to remote. (from #{c.remoteAddress})"
 
   data_srv.addListener \line, (c, line) ->
-    monitor.to_remote_line line, (err) ->
+    if command_monitor?
+      command_monitor.to_remote_line line, (err) -> return
+    data_monitor.to_remote_line line, (err) ->
       return ERR "failed to dump a line (#{line.length} bytes) sending to remote, err: #{err}" if err?
       return DBG "successfully dump a line (#{line.length} bytes) sending to remote"
 
   client.addListener \line, (line) ->
-    monitor.from_remote_line line, (err) ->
+    if command_monitor?
+      command_monitor.from_remote_line line, (err) -> return
+    data_monitor.from_remote_line line, (err) ->
       return ERR "failed to dump a line (#{line.length} bytes) receiving from remote, err: #{err}" if err?
       return DBG "successfully dump a line (#{line.length} bytes) receiving from remote"
 
@@ -322,7 +336,9 @@ main = ->
       return DBG "successfully send #{data.length} bytes to local connections"
 
   s = (srv, cb) -> return srv.startup cb
-  async.each [monitor, data_srv, client], s, (err) ->
+  servers = [data_monitor, data_srv, client]
+  servers = [command_monitor] ++ servers if command_monitor?
+  async.each servers, s, (err) ->
     EXIT "failed to startup all services, err: #{err}" if err?
     INFO "server is ready".yellow
 
