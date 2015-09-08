@@ -154,7 +154,7 @@ class BaseServer
     idx = sockets |> elem-index c
     if idx?
       sockets.splice idx, 1
-      INFO "data_srv[#{i}] disconnected and removed"
+      INFO "data_srv[#{idx}] disconnected and removed"
 
 
 class DataServer extends BaseServer
