@@ -55,15 +55,13 @@ class RemoteClient
   startConnection: ->
     self = @
     {host, hostname, port} = @url_tokens
-    @client = new net.Socket!
+    opts = readable: yes, writable: yes
+    @client = new net.Socket opts
     @client.on \error, (err) -> self.onError.apply self, [err]
     @client.on \close, -> self.onClosed.apply self, []
     @client.on \data, (data) -> self.onData.apply self, [data]
     @client.connect port, hostname, -> self.onConnected.apply self, []
-    if @line_proto
-      @line_stream = byline @client
-      @line_stream.on \data (line) -> self.onLine.apply self, [line]
-    INFO "trying to connect to #{hostname}:#{port}"
+    INFO "trying to connect to #{hostname}:#{port} with read/writeable options"
 
   onCheck: -> return @.startConnection! if not @client? and not @connected
 
@@ -82,6 +80,9 @@ class RemoteClient
     {host, hostname, port} = @url_tokens
     INFO "connected to #{host.yellow}:#{port.green}"
     @connected = yes
+    if @line_proto
+      @line_stream = byline @client
+      @line_stream.on \data (line) -> self.onLine.apply self, [line]
 
   onClosed: ->
     {host, hostname, port} = @url_tokens
